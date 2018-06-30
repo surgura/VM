@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Types.hpp"
+#include <string>
 
 class DataWriter
 {
@@ -33,6 +34,11 @@ public:
         array[offset+5] = ((u8*)(&value))[5];
         array[offset+6] = ((u8*)(&value))[6];
         array[offset+7] = ((u8*)(&value))[7];
+    }
+
+    u8 GetU8(u64 offset)
+    {
+        return array[offset];
     }
 
     u16 GetU16(u64 offset)

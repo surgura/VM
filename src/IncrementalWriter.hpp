@@ -11,6 +11,11 @@ public:
         writer(array)
     {}
 
+    u64 Pos()
+    {
+        return offset;
+    }
+
     void Set(u8 value)
     {
         writer.Set(offset, value);
