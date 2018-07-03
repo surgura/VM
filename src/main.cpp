@@ -10,13 +10,13 @@ enum class Opcode
 {
     // args | descr
     jmp = 0, // addr | jump to addr
-    jmp_stack, // - | jump to addr on stack
-    jmp_true, // address | if byte on stack is 1, jump to address
+    jmp_stack, // - | jump to addr on stack. consumes addr.
+    jmp_true, // address | if byte on stack is 1, jump to address. consumes byte.
     cmp_u8, // - | consumes two bytes from stack. pushes true on stack if equal. else false.
     sp_inc, // offset | increment sp
     sp_dec, // offset | decrease stackpointer
     push_u8,
-    push_u64, // u64
+    push_u64,
     pop_u8,
     cp_u8, // offset | copy relative byte to stack
     halt, // stops machine
@@ -27,7 +27,7 @@ enum class Opcode
 void Run(u8* _program, u8* _stack)
 {
     static constexpr bool SHOW_OPCODE_NAMES = false;
-
+    
     DataWriter program(_program);
     DataWriter stack(_stack);
 
@@ -209,7 +209,7 @@ int main()
 
     const u64 ADDR_PRINT_HW = program.Pos();
     program.Set((u16)Opcode::push_u64);
-    program.Set((u64)(ADDR_PRINT_HW+opcode_size+8+13*(opcode_size+1)+opcode_size+8)); // address to instruction after print
+    program.Set((u64)(ADDR_PRINT_HW+opcode_size+8+14*(opcode_size+1)+opcode_size+8)); // address to instruction after print
     program.Set((u16)Opcode::push_u8);
     program.Set((u8)'\0');
     program.Set((u16)Opcode::push_u8);
@@ -236,6 +236,8 @@ int main()
     program.Set((u8)'e');
     program.Set((u16)Opcode::push_u8);
     program.Set((u8)'H');
+    program.Set((u16)Opcode::push_u8);
+    program.Set((u8)'5');
     program.Set((u16)Opcode::jmp);
     program.Set((u64)ADDR_PRINT_CSTR);
     
