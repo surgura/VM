@@ -4,6 +4,8 @@
 #include <iostream>
 #include <vector>
 #include <thread>
+#include <fstream>
+#include <filesystem>
 
 static constexpr u8 opcode_size = 2;
 
@@ -214,28 +216,30 @@ void Run(u8* _memory, u64 offset_program, u64 offset_stack)
     }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    static constexpr u64 offset_program = 50;
+    if (argc != 2)
+    {
+        std::cout << "Usage: " << std::experimental::filesystem::path(argv[0]).stem() << " binary" << std::endl;
+        return 1;
+    }
+
+    static constexpr u64 offset_program = 0; // must be zero because no PIE
     static constexpr u64 offset_stack = 1000;
     static constexpr u64 offset_os = 2000;
 
-    std::vector<u8> memory;
+    std::vector<u8> bin;
+    std::ifstream file(argv[1], std::ifstream::binary);
+    std::vector<u8> memory((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+
     memory.reserve(4000);
 
     PeripheralConsole perConsole(memory.data());
     perConsole.Start();
 
-    IncrementalWriter program(memory.data()+offset_program);
     IncrementalWriter os(memory.data()+offset_os);
 
-    const u64 ADDR_PRINT_U64 = offset_os + os.Pos();
-    os.Set((u16)Opcode::print_u64);
-    os.Set((u16)Opcode::jmp_stack);
-
-    // expects stack
-    // - return addr
-    // - u8
     const u64 ADDR_PRINT_CHAR = offset_os + os.Pos();
     os.Set((u16)Opcode::set_u8);
     os.Set((u64)IO_PRINTC_DATA);
@@ -247,6 +251,12 @@ int main()
     os.Set((u64)IO_PRINTC_ENABLE);
     os.Set((u16)Opcode::jmp_true);
     os.Set((u64)ADDR_PRINT_CHAR+opcode_size*3+8*2+1);
+    os.Set((u16)Opcode::jmp_stack);
+
+    //IncrementalWriter program(memory.data()+offset_program);
+
+    /*const u64 ADDR_PRINT_U64 = offset_os + os.Pos();
+    os.Set((u16)Opcode::print_u64);
     os.Set((u16)Opcode::jmp_stack);
 
     const u64 ADDR_PRINT_CSTR = offset_os + os.Pos();
@@ -266,7 +276,7 @@ int main()
     os.Set((u8)'\n');
     os.Set((u16)Opcode::jmp);
     os.Set((u64)ADDR_PRINT_CHAR);
-
+*/
     /*
     program.Set((u16)Opcode::push_u64);
     program.Set((u64)(offset_program+opcode_size+8+opcode_size+8+opcode_size+8)); // address to instruction after print
@@ -275,7 +285,7 @@ int main()
     program.Set((u16)Opcode::jmp);
     program.Set((u64)ADDR_PRINT_U64);
 */
-
+/*
     const u64 ADDR_PRINT_HW = offset_program + program.Pos();
     program.Set((u16)Opcode::push_u64);
     program.Set((u64)(program.Pos()+8+14*(opcode_size+1)+opcode_size+8)); // address to instruction after print
@@ -310,7 +320,7 @@ int main()
     program.Set((u16)Opcode::jmp);
     program.Set((u64)ADDR_PRINT_CSTR);
     program.Set((u64)Opcode::halt);
-    
+    */
     /*
     const u64 ADDR_PRINT_HW = offset_program + program.Pos();
     program.Set((u16)Opcode::push_u64);

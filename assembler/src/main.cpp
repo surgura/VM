@@ -130,7 +130,7 @@ std::vector<u8> AssembleOperation(std::vector<std::string> const& tokens)
         if constexpr(showOpcodes)
             std::cout << "Opcode push_u8" << std::endl;
         ReqArgcount(tokens, 1, opcode);
-        u8 val = ArgHex(tokens[1]);
+        u8 val = (u8)ArgHex(tokens[1]);
         writer.Add((u16)Opcode::push_u8);
         writer.Add(val);
     }
@@ -198,6 +198,7 @@ int main(int argc, char *argv[])
     if (argc != 3)
     {
         std::cout << "Usage: " << std::experimental::filesystem::path(argv[0]).stem() << " outfile infile" << std::endl;
+        return 1;
     }
 
     std::vector<u8> bin;
@@ -206,10 +207,11 @@ int main(int argc, char *argv[])
     std::string const program{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
     file.close();
 
+
     auto progPos = program.begin();
     while(progPos != program.end())
     {
-        auto row = ParseRow(program.begin(), program.end());
+        auto row = ParseRow(progPos, program.end());
         progPos = std::get<0>(row);
         if (std::get<1>(row).size() != 0)
         {
@@ -218,8 +220,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    std::cout << "Writing " << bin.size() << " bytes" << std::endl;
     std::ofstream outfile (argv[1],std::ofstream::binary);
     outfile.write((char const*)bin.data(), bin.size());
+    outfile.close();
 
     return 0;
 }
