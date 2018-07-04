@@ -216,31 +216,41 @@ void Run(u8* _memory, u64 offset_program, u64 offset_stack)
     }
 }
 
+void LoadBin(u8* memory, std::string const& filename, u64 offset)
+{
+    std::ifstream file(filename, std::ifstream::binary);
+    std::vector<u8> bin{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    std::copy(bin.begin(), bin.end(), memory+offset);
+}
+
 int main(int argc, char *argv[])
 {
-    if (argc != 2)
+    if (argc != 3)
     {
-        std::cout << "Usage: " << std::experimental::filesystem::path(argv[0]).stem() << " binary" << std::endl;
+        std::cout << "Usage: " << std::experimental::filesystem::path(argv[0]).stem() << " binary libdir" << std::endl;
         return 1;
     }
 
     static constexpr u64 offset_program = 0; // must be zero because no PIE
     static constexpr u64 offset_stack = 1000;
-    static constexpr u64 offset_os = 2000;
+    static constexpr u64 offset_console = 2000;
+    static constexpr u64 offset_console_printc = offset_console+0;
+    static constexpr u64 offset_console_printcstr = offset_console+100;
 
-    std::vector<u8> bin;
-    std::ifstream file(argv[1], std::ifstream::binary);
-    std::vector<u8> memory((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    file.close();
-
+    std::vector<u8> memory;
     memory.reserve(4000);
+
+    LoadBin(memory.data(), argv[1], offset_program);
+    
+    LoadBin(memory.data(), std::string(argv[2])+"/console/printc.bin", offset_console_printc);
+
 
     PeripheralConsole perConsole(memory.data());
     perConsole.Start();
 
-    IncrementalWriter os(memory.data()+offset_os);
+/*    IncrementalWriter os(memory.data()+offset_console);
 
-    const u64 ADDR_PRINT_CHAR = offset_os + os.Pos();
+    const u64 ADDR_PRINT_CHAR = offset_console + os.Pos();
     os.Set((u16)Opcode::set_u8);
     os.Set((u64)IO_PRINTC_DATA);
     os.Set((u16)Opcode::push_u8);
@@ -251,7 +261,7 @@ int main(int argc, char *argv[])
     os.Set((u64)IO_PRINTC_ENABLE);
     os.Set((u16)Opcode::jmp_true);
     os.Set((u64)ADDR_PRINT_CHAR+opcode_size*3+8*2+1);
-    os.Set((u16)Opcode::jmp_stack);
+    os.Set((u16)Opcode::jmp_stack);*/
 
     //IncrementalWriter program(memory.data()+offset_program);
 

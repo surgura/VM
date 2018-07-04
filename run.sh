@@ -1,0 +1,1 @@
+.\build\bin\Debug\vm.exe .\assembler\asm\test.bin .\assembler\asm
