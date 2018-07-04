@@ -9,4 +9,4 @@ file(GLOB VM_SRC
     "src/*.cpp"
 )
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
-add_executable(vm ${VM_SRC})
+add_executable(assembler ${VM_SRC})

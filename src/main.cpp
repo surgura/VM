@@ -66,7 +66,7 @@ public:
 
 void Run(u8* _memory, u64 offset_program, u64 offset_stack)
 {
-    static constexpr bool SHOW_OPCODE_NAMES = false;
+    static constexpr bool SHOW_OPCODE_NAMES = true;
     
     DataWriter stack(_memory + offset_stack);
     DataWriter memory(_memory);
@@ -249,7 +249,6 @@ int main()
     os.Set((u64)ADDR_PRINT_CHAR+opcode_size*3+8*2+1);
     os.Set((u16)Opcode::jmp_stack);
 
-    /*
     const u64 ADDR_PRINT_CSTR = offset_os + os.Pos();
     os.Set((u16)Opcode::cp_u8);
     os.Set((u64)1);
@@ -257,15 +256,16 @@ int main()
     os.Set((u8)'\0');
     os.Set((u16)Opcode::cmp_u8);
     os.Set((u16)Opcode::jmp_true);
-    os.Set((u64)ADDR_PRINT_CSTR+opcode_size+8+opcode_size+1+opcode_size+opcode_size+8+opcode_size+opcode_size+8); // TODO
-    os.Set((u16)Opcode::print_char);
-    os.Set((u16)Opcode::jmp);
+    os.Set((u64)os.Pos()+8+2+8+2+8);
+    os.Set((u16)Opcode::push_u64);
     os.Set((u64)ADDR_PRINT_CSTR);
+    os.Set((u16)Opcode::jmp);
+    os.Set((u64)ADDR_PRINT_CHAR);
     os.Set((u16)Opcode::pop_u8);
     os.Set((u16)Opcode::push_u8);
     os.Set((u8)'\n');
-    os.Set((u16)Opcode::print_char);
-    os.Set((u16)Opcode::jmp_stack);*/
+    os.Set((u16)Opcode::jmp);
+    os.Set((u64)ADDR_PRINT_CHAR);
 
     /*
     program.Set((u16)Opcode::push_u64);
@@ -275,10 +275,10 @@ int main()
     program.Set((u16)Opcode::jmp);
     program.Set((u64)ADDR_PRINT_U64);
 */
-/*
-    const u64 ADDR_PRINT_HW = program.Pos();
+
+    const u64 ADDR_PRINT_HW = offset_program + program.Pos();
     program.Set((u16)Opcode::push_u64);
-    program.Set((u64)(ADDR_PRINT_HW+opcode_size+8+14*(opcode_size+1)+opcode_size+8)); // address to instruction after print
+    program.Set((u64)(program.Pos()+8+14*(opcode_size+1)+opcode_size+8)); // address to instruction after print
     program.Set((u16)Opcode::push_u8);
     program.Set((u8)'\0');
     program.Set((u16)Opcode::push_u8);
@@ -308,8 +308,10 @@ int main()
     program.Set((u16)Opcode::push_u8);
     program.Set((u8)'5');
     program.Set((u16)Opcode::jmp);
-    program.Set((u64)ADDR_PRINT_CSTR);*/
+    program.Set((u64)ADDR_PRINT_CSTR);
+    program.Set((u64)Opcode::halt);
     
+    /*
     const u64 ADDR_PRINT_HW = offset_program + program.Pos();
     program.Set((u16)Opcode::push_u64);
     program.Set((u64)(ADDR_PRINT_HW+opcode_size*3+2*8+1)); // address to instruction after print
@@ -317,9 +319,7 @@ int main()
     program.Set((u8)'X');
     program.Set((u16)Opcode::jmp);
     program.Set((u64)ADDR_PRINT_CHAR);
-    program.Set((u64)Opcode::halt);
-    //program.Set((u16)Opcode::jmp); // jump
-    //program.Set((u64)0); // addr to begin of program
+    program.Set((u64)Opcode::halt);*/
 
     Run(memory.data(), offset_program, offset_stack);
     perConsole.Stop();

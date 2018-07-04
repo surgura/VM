@@ -1,7 +1,7 @@
 :hello_world
-push_u64     :end
-push_u8      '\0'
-push_u8      '!'
+push    u64     :end
+push    u8      '\0'
+push    u8      '!'
 push    u8      'd'
 push    u8      'l'
 push    u8      'r'
