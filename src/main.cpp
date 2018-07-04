@@ -47,10 +47,9 @@ public:
             run = true;
             while(run)
             {
-                //std::cout << (u64)memory.GetU8(IO_PRINTC_ENABLE) << std::endl;
                 if(memory.GetU8(IO_PRINTC_ENABLE) == 1)
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     std::cout << memory.GetU8(IO_PRINTC_DATA);
                     memory.Set(IO_PRINTC_ENABLE, (u8)0);
                 }
@@ -65,21 +64,20 @@ public:
     }
 };
 
-void Run(u8* _program, u8* _stack, u8* _memory)
+void Run(u8* _memory, u64 offset_program, u64 offset_stack)
 {
-    static constexpr bool SHOW_OPCODE_NAMES = true;
+    static constexpr bool SHOW_OPCODE_NAMES = false;
     
-    DataWriter program(_program);
-    DataWriter stack(_stack);
+    DataWriter stack(_memory + offset_stack);
     DataWriter memory(_memory);
 
-    u64 pc = 0;
+    u64 pc = offset_program;
     u64 sp = 0;
     while(true)
     {
         //std::cout << "sp: " << sp << std::endl;
         //std::cout << "pc: " << pc << std::endl;
-        Opcode opcode = (Opcode)program.GetU16(pc);
+        Opcode opcode = (Opcode)memory.GetU16(pc);
         //std::cout << (u16)opcode << std::endl;
         switch(opcode)
         {
@@ -87,7 +85,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
             {
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "jmp";
-                u64 addr = program.GetU64(pc+opcode_size);
+                u64 addr = memory.GetU64(pc+opcode_size);
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << ": " << addr << std::endl;
                 pc = addr;
@@ -109,7 +107,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "jmp_true" << std::endl;
                 if ((bool)stack.GetU8(sp-1))
-                    pc = program.GetU64(pc+opcode_size);
+                    pc = memory.GetU64(pc+opcode_size);
                 else
                     pc += opcode_size+8;
                 sp -= 1;
@@ -128,7 +126,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
             {
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "push_u8" << std::endl;
-                stack.Set(sp, program.GetU8(pc+opcode_size));
+                stack.Set(sp, memory.GetU8(pc+opcode_size));
                 sp += 1;
                 pc += opcode_size+1;
             }
@@ -137,7 +135,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
             {
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "push_u64" << std::endl;
-                stack.Set(sp, program.GetU64(pc+opcode_size));
+                stack.Set(sp, memory.GetU64(pc+opcode_size));
                 sp += 8;
                 pc += opcode_size+8;
             }
@@ -146,7 +144,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
             {
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "cp_u8" << std::endl;
-                stack.Set(sp, stack.GetU8(sp-program.GetU64(pc+opcode_size)));
+                stack.Set(sp, stack.GetU8(sp-memory.GetU64(pc+opcode_size)));
                 sp += 1;
                 pc += opcode_size+8;
             }
@@ -155,7 +153,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
             {
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "cp_abs_u8" << std::endl;
-                stack.Set(sp, memory.GetU8(program.GetU64(pc+opcode_size)));
+                stack.Set(sp, memory.GetU8(memory.GetU64(pc+opcode_size)));
                 sp += 1;
                 pc += opcode_size+8;
             }
@@ -181,7 +179,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
             {
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "sp_dec" << std::endl;
-                sp -= program.GetU64(pc+opcode_size);
+                sp -= memory.GetU64(pc+opcode_size);
                 pc += opcode_size+8;
             }
             break;
@@ -189,14 +187,14 @@ void Run(u8* _program, u8* _stack, u8* _memory)
             {
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "sp_inc" << std::endl;
-                sp += program.GetU64(pc+opcode_size);
+                sp += memory.GetU64(pc+opcode_size);
                 pc += opcode_size+8;
             }
             break;
             case Opcode::set_u8:
                 if constexpr(SHOW_OPCODE_NAMES)
                     std::cout << "set_u8" << std::endl;
-                memory.Set(program.GetU64(pc+opcode_size), stack.GetU8(sp-1));
+                memory.Set(memory.GetU64(pc+opcode_size), stack.GetU8(sp-1));
                 sp += -1;
                 pc += opcode_size+8;
             break;
@@ -218,7 +216,7 @@ void Run(u8* _program, u8* _stack, u8* _memory)
 
 int main()
 {
-    static constexpr u64 offset_program = 0;
+    static constexpr u64 offset_program = 50;
     static constexpr u64 offset_stack = 1000;
     static constexpr u64 offset_os = 2000;
 
@@ -228,7 +226,7 @@ int main()
     PeripheralConsole perConsole(memory.data());
     perConsole.Start();
 
-    IncrementalWriter program(memory.data());
+    IncrementalWriter program(memory.data()+offset_program);
     IncrementalWriter os(memory.data()+offset_os);
 
     const u64 ADDR_PRINT_U64 = offset_os + os.Pos();
@@ -269,13 +267,14 @@ int main()
     os.Set((u16)Opcode::print_char);
     os.Set((u16)Opcode::jmp_stack);*/
 
+    /*
     program.Set((u16)Opcode::push_u64);
-    program.Set((u64)(opcode_size+8+opcode_size+8+opcode_size+8)); // address to instruction after print
+    program.Set((u64)(offset_program+opcode_size+8+opcode_size+8+opcode_size+8)); // address to instruction after print
     program.Set((u16)Opcode::push_u64);
     program.Set((u64)1234); // u64 to print
     program.Set((u16)Opcode::jmp);
     program.Set((u64)ADDR_PRINT_U64);
-
+*/
 /*
     const u64 ADDR_PRINT_HW = program.Pos();
     program.Set((u16)Opcode::push_u64);
@@ -311,9 +310,9 @@ int main()
     program.Set((u16)Opcode::jmp);
     program.Set((u64)ADDR_PRINT_CSTR);*/
     
-    const u64 ADDR_PRINT_HW = program.Pos();
+    const u64 ADDR_PRINT_HW = offset_program + program.Pos();
     program.Set((u16)Opcode::push_u64);
-    program.Set((u64)(ADDR_PRINT_HW+opcode_size*3+8+1+8)); // address to instruction after print
+    program.Set((u64)(ADDR_PRINT_HW+opcode_size*3+2*8+1)); // address to instruction after print
     program.Set((u16)Opcode::push_u8);
     program.Set((u8)'X');
     program.Set((u16)Opcode::jmp);
@@ -322,7 +321,7 @@ int main()
     //program.Set((u16)Opcode::jmp); // jump
     //program.Set((u64)0); // addr to begin of program
 
-    Run(memory.data(), memory.data()+offset_stack, memory.data());
+    Run(memory.data(), offset_program, offset_stack);
     perConsole.Stop();
 
     return 0;
