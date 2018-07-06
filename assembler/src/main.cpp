@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <fstream>
 #include <filesystem>
+#include <unordered_map>
+#include <variant>
 
 static constexpr u8 opcode_size = 2;
 
@@ -67,12 +69,33 @@ u64 ArgHex(std::string const& hex)
     return std::stoul(hex, nullptr, 16);
 }
 
-std::vector<u8> AssembleOperation(std::vector<std::string> const& tokens)
+std::variant<u64, std::string> ParseArgU64(std::string const& token)
+{
+    if (token[0] == ':')
+    {
+        std::string::const_iterator labelEnd = std::find_if(token.begin()+1, token.end(), [](char const& c) { return c == '\n'; });
+        if(std::distance(token.begin()+1, labelEnd) == 0)
+        {
+            std::string msg = "Attempt to use label with size 0.";
+            std::cout << msg << std::endl;
+            throw std::runtime_error(msg);
+        }
+        std::string label(token.begin()+1, labelEnd);
+        return label;
+    }
+    else
+    {
+        return ArgHex(token);
+    }
+}
+
+std::tuple<std::vector<u8>, std::vector<std::tuple<std::string, u64>>> AssembleOperation(std::vector<std::string> const& tokens)
 {
     static constexpr bool showOpcodes = true;
 
     std::vector<u8> result;
     DataWriter writer(result);
+    std::vector<std::tuple<std::string, u64>> labelOpenings;
 
     std::string const& opcode = tokens[0];
     if (opcode == "jmp")
@@ -80,9 +103,15 @@ std::vector<u8> AssembleOperation(std::vector<std::string> const& tokens)
         if constexpr(showOpcodes)
             std::cout << "Opcode jmp" << std::endl;
         ReqArgcount(tokens, 1, opcode);
-        u64 addr = ArgHex(tokens[1]);
+        auto addr = ParseArgU64(tokens[1]);
         writer.Add((u16)Opcode::jmp);
-        writer.Add(addr);
+        if (std::holds_alternative<u64>(addr))
+            writer.Add(std::get<u64>(addr));
+        else
+        {
+            labelOpenings.push_back({std::get<std::string>(addr), writer.Pos()});
+            writer.Add((u64)0);
+        }
     }
     else if (opcode == "jmps")
     {
@@ -96,9 +125,15 @@ std::vector<u8> AssembleOperation(std::vector<std::string> const& tokens)
         if constexpr(showOpcodes)
             std::cout << "Opcode jmp_true" << std::endl;
         ReqArgcount(tokens, 1, opcode);
-        u64 addr = ArgHex(tokens[1]);
+        auto addr = ParseArgU64(tokens[1]);
         writer.Add((u16)Opcode::jmp_true);
-        writer.Add(addr);
+        if (std::holds_alternative<u64>(addr))
+            writer.Add(std::get<u64>(addr));
+        else
+        {
+            labelOpenings.push_back({std::get<std::string>(addr), writer.Pos()});
+            writer.Add((u64)0);
+        }
     }
     else if (opcode == "cmp_u8")
     {
@@ -139,9 +174,15 @@ std::vector<u8> AssembleOperation(std::vector<std::string> const& tokens)
         if constexpr(showOpcodes)
             std::cout << "Opcode push_u64" << std::endl;
         ReqArgcount(tokens, 1, opcode);
-        u64 val = ArgHex(tokens[1]);
+        auto val = ParseArgU64(tokens[1]);
         writer.Add((u16)Opcode::push_u64);
-        writer.Add(val);
+        if (std::holds_alternative<u64>(val))
+            writer.Add(std::get<u64>(val));
+        else
+        {
+            labelOpenings.push_back({std::get<std::string>(val), writer.Pos()});
+            writer.Add((u64)0);
+        }
     }
     else if (opcode == "pop_u8")
     {
@@ -190,7 +231,48 @@ std::vector<u8> AssembleOperation(std::vector<std::string> const& tokens)
         std::cout << msg << std::endl;
         throw std::runtime_error(msg);
     }
-    return result;
+    return {result, labelOpenings};
+}
+
+std::tuple<std::string::const_iterator, u64> ParseOffset(std::string::const_iterator rowBegin, std::string::const_iterator end)
+{
+    
+    std::string::const_iterator colon = std::find_if(rowBegin, end, [](char const& c){return c == ':' || c == '\n';});
+    if (colon == end || *colon == '\n')
+    {
+        std::string msg = "Could not parse offset. Did not find colon.";
+        std::cout << msg << std::endl;
+        throw std::runtime_error(msg);
+    }
+    auto numBegin = colon+1;
+    std::string::const_iterator numEnd = std::find_if(numBegin, end, [](char const& c){return c == '\n';});
+    if(std::distance(numBegin, numEnd) == 0)
+    {
+        std::string msg = "Could not parse offset. Range 0.";
+        std::cout << msg << std::endl;
+        throw std::runtime_error(msg);
+    }
+    std::string numstr(numBegin, numEnd);
+
+    return {numEnd+1, ArgHex(numstr)};
+}
+
+bool IsLabel(std::string::const_iterator rowBegin, std::string::const_iterator end)
+{
+    return *rowBegin == ':';
+}
+
+std::tuple<std::string::const_iterator, std::string> ParseLabel(std::string::const_iterator rowBegin, std::string::const_iterator end)
+{
+    std::string::const_iterator labelEnd = std::find_if(rowBegin, end, [](char const& c){return c == '\n';});
+    if (std::distance(rowBegin+1, labelEnd) == 0)
+    {
+        std::string msg = "Label has length 0.";
+        std::cout << msg << std::endl;
+        throw std::runtime_error(msg);
+    }
+    std::string label(rowBegin+1, labelEnd);
+    return {labelEnd+1, label};
 }
 
 int main(int argc, char *argv[])
@@ -207,16 +289,52 @@ int main(int argc, char *argv[])
     std::string const program{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
     file.close();
 
-
     auto progPos = program.begin();
+
+    auto[newProgPos, globalOffset] = ParseOffset(progPos, program.end());
+    progPos = newProgPos;
+
+    std::unordered_map<std::string, u64> labels;
+    std::vector<std::tuple<std::string, u64>> labelOpenings;
+
     while(progPos != program.end())
     {
-        auto row = ParseRow(progPos, program.end());
-        progPos = std::get<0>(row);
-        if (std::get<1>(row).size() != 0)
+        if (IsLabel(progPos, program.end()))
         {
-            std::vector<u8> opBin = AssembleOperation(std::get<1>(row));
-            bin.insert(bin.end(), opBin.begin(), opBin.end());
+            auto[newProgPos, labelName] = ParseLabel(progPos, program.end());
+            progPos = newProgPos;
+            labels.insert({labelName, bin.size()});
+        }
+        else
+        {
+            auto row = ParseRow(progPos, program.end());
+            progPos = std::get<0>(row);
+            if (std::get<1>(row).size() != 0)
+            {
+                // TODO
+                auto[opBin, newLabelOpenings] = AssembleOperation(std::get<1>(row));
+                for (auto lab : newLabelOpenings)
+                {
+                    labelOpenings.push_back({std::get<std::string>(lab), std::get<u64>(lab)+bin.size()});
+                }
+                bin.insert(bin.end(), opBin.begin(), opBin.end());
+            }
+        }
+    }
+
+    for(auto opening : labelOpenings)
+    {
+        auto offset = labels.find(std::get<std::string>(opening));
+        if (offset == labels.end())
+        {
+            std::string msg = "Used unset label:" + std::get<std::string>(opening);
+            std::cout << msg << std::endl;
+            throw std::runtime_error(msg);
+        }
+        for (u8 i = 0; i < 8; ++i)
+        {
+            u64 off = offset->second+globalOffset;
+            bin[(size_t)std::get<u64>(opening)+i] = ((u8*)(&off))[i];
         }
     }
 

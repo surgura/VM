@@ -12,6 +12,11 @@ public:
         data(data)
     {}
 
+    u64 Pos()
+    {
+        return data.size();
+    }
+
     void Add(u8 value)
     {
         data.push_back(value);
